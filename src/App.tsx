@@ -41,7 +41,8 @@ import {
   LogOut,
   UserCheck,
   Menu,
-  LayoutDashboard
+  LayoutDashboard,
+  Edit
 } from 'lucide-react';
 
 // Interfaces for our Complaint schema matching the spreadsheet headers exactly
@@ -479,6 +480,138 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('siskadu_gas_url', gasUrl);
   }, [gasUrl]);
+
+  // States for full Add/Edit Form Modal
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
+  const [formValues, setFormValues] = useState<Complaint>({
+    timestamp: '',
+    tanggalDiterima: '',
+    media: 'Form Online',
+    namaPelapor: '',
+    namaSiswa: '',
+    kelas: '',
+    tema: 'Fasilitas Sekolah',
+    target: 'Sekolah',
+    namaTarget: '',
+    isi: '',
+    urgensi: 'Sedang',
+    bukti: '-',
+    pic: '-',
+    status: 'Baru',
+    tindakan: '-',
+    tanggalSelesai: 'Menunggu diselesaikan',
+    beritaAcara: 'Tidak ada'
+  });
+
+  const handleOpenAddForm = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayISO = `${year}-${month}-${day}`;
+    
+    setFormMode('add');
+    setFormValues({
+      timestamp: '',
+      tanggalDiterima: todayISO,
+      media: 'Form Online',
+      namaPelapor: '',
+      namaSiswa: '',
+      kelas: '',
+      tema: 'Fasilitas Sekolah',
+      target: 'Sekolah',
+      namaTarget: 'Al-Wildan 10 Jakarta',
+      isi: '',
+      urgensi: 'Sedang',
+      bukti: '-',
+      pic: '-',
+      status: 'Baru',
+      tindakan: '-',
+      tanggalSelesai: 'Menunggu diselesaikan',
+      beritaAcara: 'Tidak ada'
+    });
+    setIsFormOpen(true);
+  };
+
+  const handleOpenEditForm = (comp: Complaint) => {
+    setFormMode('edit');
+    
+    let dateVal = comp.tanggalDiterima;
+    if (dateVal && !dateVal.includes('-')) {
+      const parts = dateVal.split('/');
+      if (parts.length === 3) {
+        const d = parts[0].padStart(2, '0');
+        const m = parts[1].padStart(2, '0');
+        const y = parts[2];
+        dateVal = `${y}-${m}-${d}`;
+      }
+    }
+
+    setFormValues({
+      ...comp,
+      tanggalDiterima: dateVal
+    });
+    setIsFormOpen(true);
+  };
+
+  const handleSubmitForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    let formattedDate = formValues.tanggalDiterima;
+    if (formattedDate && formattedDate.includes('-')) {
+      const parts = formattedDate.split('-');
+      if (parts.length === 3 && parts[0].length === 4) { // YYYY-MM-DD
+        formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+    }
+
+    if (formMode === 'add') {
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = now.getFullYear();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const generatedTimestamp = `${day}/${month}/${year} ${hours}:${minutes}`;
+
+      const newComplaint: Complaint = {
+        ...formValues,
+        timestamp: generatedTimestamp,
+        tanggalDiterima: formattedDate || `${day}/${month}/${year}`,
+        tanggalSelesai: formValues.status === 'Selesai' && (!formValues.tanggalSelesai || formValues.tanggalSelesai === 'Menunggu diselesaikan')
+          ? `${day}/${month}/${year}`
+          : formValues.tanggalSelesai
+      };
+
+      setComplaints([newComplaint, ...complaints]);
+      setIsFormOpen(false);
+      alert("Pengaduan baru berhasil ditambahkan!");
+    } else {
+      const updated = complaints.map(c => {
+        if (c.timestamp === formValues.timestamp && c.namaPelapor === formValues.namaPelapor) {
+          return {
+            ...formValues,
+            tanggalDiterima: formattedDate,
+            tanggalSelesai: formValues.status === 'Selesai' && (!formValues.tanggalSelesai || formValues.tanggalSelesai === 'Menunggu diselesaikan')
+              ? new Date().toLocaleDateString('id-ID')
+              : formValues.tanggalSelesai
+          };
+        }
+        return c;
+      });
+
+      setComplaints(updated);
+      setIsFormOpen(false);
+
+      const refreshed = updated.find(c => c.timestamp === formValues.timestamp && c.namaPelapor === formValues.namaPelapor);
+      if (refreshed) {
+        setSelectedComplaint(refreshed);
+      }
+
+      alert("Data pengaduan berhasil diperbarui!");
+    }
+  };
 
   // Sorting state
   const [sortField, setSortField] = useState<string>(''); // empty by default = use defaultSortComplaints (Requirement 6)
@@ -1317,6 +1450,15 @@ function doPost(e) {
         {/* Action Buttons & Integration Indicators */}
         <div className="flex items-center gap-2 md:gap-4">
           
+          {/* Tambah Pengaduan Button */}
+          <button 
+            onClick={handleOpenAddForm}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] md:text-xs font-bold rounded-lg transition-colors shadow-sm cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Tambah Pengaduan</span>
+          </button>
+          
           {/* Connection Status Badge */}
           <button 
             id="connection-badge-btn"
@@ -1748,13 +1890,22 @@ function doPost(e) {
                     <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
                     Atensi Utama & Pengaduan Terbaru (5 Teratas)
                   </h3>
-                  <button
-                    onClick={() => setActiveTab('historis')}
-                    className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
-                  >
-                    Buka Historis Lengkap
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleOpenAddForm}
+                      className="px-2.5 py-1 text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded transition cursor-pointer flex items-center gap-1 shrink-0"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Tambah Pengaduan
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('historis')}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer shrink-0"
+                    >
+                      Buka Historis Lengkap
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-auto">
@@ -1985,6 +2136,13 @@ function doPost(e) {
                   >
                     <Filter className="w-3 h-3 text-blue-600" />
                     {showAdvancedFilters ? 'Sembunyikan Filter Lanjutan' : 'Tampilkan 14 Filter Lanjutan'}
+                  </button>
+                   <button 
+                    onClick={handleOpenAddForm}
+                    className="px-2.5 py-1 text-[10px] font-bold bg-blue-600 text-white rounded hover:bg-blue-700 transition cursor-pointer flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Tambah Pengaduan
                   </button>
                   <button 
                     onClick={handleResetData}
@@ -3291,6 +3449,23 @@ function doPost(e) {
 
             </div>
 
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex gap-2 justify-end shrink-0">
+              <button
+                onClick={() => handleOpenEditForm(selectedComplaint)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Edit className="w-4 h-4" />
+                Edit Data Keluhan
+              </button>
+              <button
+                onClick={() => setSelectedComplaint(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+
           </div>
         </div>
       )}
@@ -3457,6 +3632,354 @@ function doPost(e) {
                 className="px-5 py-2 bg-slate-800 text-white font-bold text-xs rounded hover:bg-slate-900 transition cursor-pointer"
               >
                 Selesai
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Tambah & Edit Data Keluhan */}
+      {isFormOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={() => setIsFormOpen(false)}>
+          <div 
+            className="bg-white rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <h4 className="font-bold text-slate-800 text-sm md:text-base flex items-center gap-2">
+                <Edit className="w-5 h-5 text-blue-600" />
+                {formMode === 'add' ? 'Tambah Pengaduan Baru' : 'Edit Data Pengaduan'}
+              </h4>
+              <button 
+                onClick={() => setIsFormOpen(false)} 
+                className="p-1.5 hover:bg-slate-200 rounded-full transition cursor-pointer text-slate-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Form */}
+            <form onSubmit={handleSubmitForm} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs text-slate-700">
+              
+              {formMode === 'edit' && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>Anda sedang mengedit keluhan dengan ID/Timestamp: <strong>{formValues.timestamp}</strong>. Pastikan perubahan telah sesuai.</span>
+                </div>
+              )}
+
+              {/* Group 1: Informasi Pelapor & Siswa */}
+              <div className="space-y-3">
+                <h5 className="font-bold text-slate-800 uppercase tracking-wider text-[10px] border-b pb-1 border-slate-100">
+                  1. Informasi Pengirim & Siswa
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nama Pelapor <span className="text-red-500">*</span></label>
+                    <input 
+                      type="text"
+                      required
+                      placeholder="Contoh: Abu Aufa"
+                      value={formValues.namaPelapor}
+                      onChange={(e) => setFormValues({ ...formValues, namaPelapor: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nama Siswa Terkait <span className="text-red-500">*</span></label>
+                    <input 
+                      type="text"
+                      required
+                      placeholder="Contoh: Aufa"
+                      value={formValues.namaSiswa}
+                      onChange={(e) => setFormValues({ ...formValues, namaSiswa: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kelas <span className="text-red-500">*</span></label>
+                    <input 
+                      type="text"
+                      required
+                      placeholder="Contoh: 2 Inter 1"
+                      value={formValues.kelas}
+                      onChange={(e) => setFormValues({ ...formValues, kelas: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 2: Detail Keluhan */}
+              <div className="space-y-3">
+                <h5 className="font-bold text-slate-800 uppercase tracking-wider text-[10px] border-b pb-1 border-slate-100">
+                  2. Detail & Kategori Pengaduan
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tanggal Terima <span className="text-red-500">*</span></label>
+                    <input 
+                      type="date"
+                      required
+                      value={formValues.tanggalDiterima}
+                      onChange={(e) => setFormValues({ ...formValues, tanggalDiterima: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Media Pelaporan <span className="text-red-500">*</span></label>
+                    <select
+                      value={formValues.media}
+                      onChange={(e) => setFormValues({ ...formValues, media: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    >
+                      <option value="Form Online">Form Online</option>
+                      <option value="Tatap Muka">Tatap Muka</option>
+                      <option value="Whatsapp">Whatsapp</option>
+                      <option value="Telepon">Telepon</option>
+                      <option value="Email">Email</option>
+                      <option value="Website">Website</option>
+                      <option value="Lainnya">Lainnya</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tema Pelaporan <span className="text-red-500">*</span></label>
+                    <select
+                      value={formValues.tema}
+                      onChange={(e) => setFormValues({ ...formValues, tema: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    >
+                      <option value="Fasilitas Sekolah">Fasilitas Sekolah</option>
+                      <option value="Administrasi Sekolah">Administrasi Sekolah</option>
+                      <option value="Kurikulum & Pembelajaran">Kurikulum & Pembelajaran</option>
+                      <option value="Keamanan">Keamanan</option>
+                      <option value="Kantin">Kantin</option>
+                      <option value="Sosial/Bullying">Sosial/Bullying</option>
+                      <option value="Kinerja Guru">Kinerja Guru</option>
+                      <option value="Lainnya">Lainnya</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tingkat Urgensi <span className="text-red-500">*</span></label>
+                    <select
+                      value={formValues.urgensi}
+                      onChange={(e) => setFormValues({ ...formValues, urgensi: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    >
+                      <option value="Rendah">Rendah</option>
+                      <option value="Sedang">Sedang</option>
+                      <option value="Tinggi">Tinggi</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sektor Target <span className="text-red-500">*</span></label>
+                    <select
+                      value={formValues.target}
+                      onChange={(e) => setFormValues({ ...formValues, target: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    >
+                      <option value="Sekolah">Sekolah</option>
+                      <option value="Guru">Guru</option>
+                      <option value="Siswa">Siswa</option>
+                      <option value="Kantin">Kantin</option>
+                      <option value="Karyawan">Karyawan</option>
+                      <option value="Fasilitas">Fasilitas</option>
+                      <option value="Lainnya">Lainnya</option>
+                    </select>
+                  </div>
+                  <div className="col-span-1 md:col-span-2">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nama Spesifik Target <span className="text-red-500">*</span></label>
+                    <input 
+                      type="text"
+                      required
+                      placeholder="Contoh: Al-Wildan 10 Jakarta / Ustadz Syarif"
+                      value={formValues.namaTarget}
+                      onChange={(e) => setFormValues({ ...formValues, namaTarget: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Isi Laporan Pengaduan <span className="text-red-500">*</span></label>
+                  <textarea
+                    required
+                    rows={4}
+                    placeholder="Tulis rincian masalah secara mendetail..."
+                    value={formValues.isi}
+                    onChange={(e) => setFormValues({ ...formValues, isi: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all font-sans text-xs leading-relaxed"
+                  />
+                </div>
+              </div>
+
+              {/* Group 3: File Bukti & Upload (Usability Patterns) */}
+              <div className="space-y-3">
+                <h5 className="font-bold text-slate-800 uppercase tracking-wider text-[10px] border-b pb-1 border-slate-100">
+                  3. Unggah Dokumen / Link Bukti
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Interactive Drag & Drop Area */}
+                  <div 
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.add('border-blue-500', 'bg-blue-50/40');
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove('border-blue-500', 'bg-blue-50/40');
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove('border-blue-500', 'bg-blue-50/40');
+                      const file = e.dataTransfer.files[0];
+                      if (file) {
+                        setFormValues({ ...formValues, bukti: file.name });
+                        alert(`File "${file.name}" siap diunggah!`);
+                      }
+                    }}
+                    onClick={() => {
+                      document.getElementById('form-file-upload')?.click();
+                    }}
+                    className="border-2 border-dashed border-slate-300 rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer hover:border-blue-400 hover:bg-slate-50/80 transition-all"
+                  >
+                    <FileSpreadsheet className="w-8 h-8 text-blue-500 mb-1.5 shrink-0" />
+                    <span className="font-semibold text-slate-700">Tarik & Lepas File di Sini</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5">atau Klik untuk Telusuri File</span>
+                    <input 
+                      id="form-file-upload"
+                      type="file"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setFormValues({ ...formValues, bukti: file.name });
+                          alert(`File "${file.name}" berhasil dipilih!`);
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {/* Text representation / URL field */}
+                  <div className="flex flex-col justify-between space-y-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nama File / Tautan Bukti Terdaftar</label>
+                      <input 
+                        type="text"
+                        placeholder="Contoh: bukti-foto.jpg atau masukkan link"
+                        value={formValues.bukti}
+                        onChange={(e) => setFormValues({ ...formValues, bukti: e.target.value })}
+                        className="w-full p-2.5 border border-slate-300 rounded-lg bg-white placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      />
+                    </div>
+                    <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-100 text-[10px] text-slate-500 leading-normal">
+                      Sistem mendukung berkas gambar, rekaman audio, pdf, maupun tautan cloud drive eksternal. Pastikan dokumen bukti beresolusi jelas.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 4: Tindak Lanjut & Status (PIC / Penanganan) */}
+              <div className="space-y-3">
+                <h5 className="font-bold text-slate-800 uppercase tracking-wider text-[10px] border-b pb-1 border-slate-100">
+                  4. Penanganan Masalah & PIC Sekolah
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status Penanganan</label>
+                    <select
+                      value={formValues.status}
+                      onChange={(e) => {
+                        const isSelesai = e.target.value === 'Selesai';
+                        const todayStr = new Date().toLocaleDateString('id-ID');
+                        setFormValues({ 
+                          ...formValues, 
+                          status: e.target.value,
+                          tanggalSelesai: isSelesai ? todayStr : 'Menunggu diselesaikan'
+                        });
+                      }}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    >
+                      <option value="Baru">Baru</option>
+                      <option value="On Progress">On Progress</option>
+                      <option value="Selesai">Selesai</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">PIC Penanggung Jawab</label>
+                    <input 
+                      type="text"
+                      placeholder="Contoh: Admin Utama / Nama PIC"
+                      value={formValues.pic === '-' ? '' : formValues.pic}
+                      onChange={(e) => setFormValues({ ...formValues, pic: e.target.value || '-' })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tanggal Penyelesaian</label>
+                    <input 
+                      type="text"
+                      disabled={formValues.status !== 'Selesai'}
+                      placeholder="Contoh: Menunggu diselesaikan / 18/07/2026"
+                      value={formValues.tanggalSelesai}
+                      onChange={(e) => setFormValues({ ...formValues, tanggalSelesai: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 text-slate-500 disabled:opacity-75 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tindakan Realisasi Diambil</label>
+                    <textarea
+                      rows={2}
+                      placeholder="Langkah nyata yang diambil sekolah untuk menyelesaikan masalah..."
+                      value={formValues.tindakan === '-' ? '' : formValues.tindakan}
+                      onChange={(e) => setFormValues({ ...formValues, tindakan: e.target.value || '-' })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all font-sans text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tautan File Berita Acara (Optional)</label>
+                    <input 
+                      type="text"
+                      placeholder="Contoh: https://drive.google.com/..."
+                      value={formValues.beritaAcara === 'Tidak ada' ? '' : formValues.beritaAcara}
+                      onChange={(e) => setFormValues({ ...formValues, beritaAcara: e.target.value || 'Tidak ada' })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg bg-white placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Informational Sync Note */}
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-[10px] text-blue-700 leading-normal">
+                <strong>Catatan Sinkronisasi:</strong> Penyimpanan ini dilakukan secara langsung ke database internal aplikasi. Jika sistem terhubung dengan Google Sheets, pastikan melakukan pembaharuan data di spreadsheet agar data tidak terabaikan saat sinkronisasi ditarik ulang.
+              </div>
+
+            </form>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2.5 shrink-0">
+              <button 
+                type="button"
+                onClick={() => setIsFormOpen(false)}
+                className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                Batalkan
+              </button>
+              <button 
+                type="button"
+                onClick={handleSubmitForm}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
+              >
+                <Check className="w-4 h-4" />
+                {formMode === 'add' ? 'Simpan Pengaduan' : 'Simpan Perubahan'}
               </button>
             </div>
 
